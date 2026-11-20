@@ -622,6 +622,35 @@ export function apply(ctx: Context, config: PluginConfig) {
       }))
   }
 
+  /**
+   * Koishi help 的 formatCommands 只迭代 command.children——只列一层子指令，
+   * 所以 `nekoapi` 的帮助里看不到 `nekoapi model status` 这类二级指令。
+   * showHelp 会 emit('help/command', output, command, session)，这里从指令注册表里
+   * 把二级指令补进同一个 output；仍然是一条 Koishi help 消息，不额外多发一条。
+   */
+  // 事件名由 @koishijs/plugin-help 声明，宿主没装它时类型里没有这个 key，这里放宽类型
+  ctx.on('help/command' as any, (output: string[], command: any, session: any) => {
+    const scope = String(command?.name ?? '')
+    if (!prefixes.includes(scope)) return
+    const lines: string[] = []
+    for (const child of command.children ?? []) {
+      for (const grand of child.children ?? []) {
+        if (session && session.resolve(grand.config?.hidden)) continue
+        const title = String(grand.displayName ?? grand.name).replace(/\./g, ' ')
+        const desc = session ? session.text([`commands.${grand.name}.description`, '']) : ''
+        lines.push(`    /${title}${grand.declaration ?? ''}${desc ? '  ' + desc : ''}`)
+      }
+    }
+    // `test list` 不是独立指令，但它是最常用的用法之一，单独补一行
+    const usage = commandList(scope, clampHours(config.healthHours, 1))
+      .find(item => item.usage === `${scope} test list`)
+    if (usage && (command.children ?? []).some((child: any) => child.name === `${scope}.test`)) {
+      lines.push(`    /${usage.usage}  ${sanitize(usage.desc, ...secrets())}`)
+    }
+    if (!lines.length) return
+    output.push('', '二级子指令：', ...lines)
+  })
+
   logger.info('插件已加载：前缀 %s，站点 %s，渲染 %s，日志等级 %s',
     prefixes.join(', '), hostOf(config.baseUrl), config.render, config.logLevel)
 

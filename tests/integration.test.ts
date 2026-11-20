@@ -234,12 +234,22 @@ describe('指令注册', () => {
 
 describe('指令输出', () => {
   it('/newapi help 走 Koishi help，并在末尾追加自定义文本', async () => {
-    const text = await run('/newapi help')
+    // 一次调用只能发一条消息（曾经因为先在 help 里发送、再返回兜底文本而发两条）
+    const replies = await app.mock.client('admin', '200').receive('/newapi help')
+    expect(replies.length).toBe(1)
+    const text = replies.join('\n')
     // 正文来自 @koishijs/plugin-help：标题 + 用法 + 子指令清单都是一层层列
     expect(text).toContain('指令：newapi')
     expect(text).toContain('/newapi status')
     expect(text).toContain('/newapi model')
     expect(text).toContain('/newapi test')
+    // Koishi 的 formatCommands 只列一层子指令，二级指令由 help/command 钩子补进同一段输出
+    expect(text).toContain('二级子指令')
+    expect(text).toContain('/newapi model status')
+    expect(text).toContain('/newapi model health')
+    expect(text).toContain('/newapi group ratio')
+    expect(text).toContain('/newapi group search')
+    expect(text).toContain('/newapi test list')
     // 自定义底部文本必须真的在最后
     expect(text.trimEnd().endsWith(HELP_TEXT)).toBe(true)
   })
