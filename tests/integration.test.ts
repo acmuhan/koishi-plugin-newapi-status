@@ -6,12 +6,17 @@
 import { App } from 'koishi'
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { Logger } from 'koishi'
 import * as plugin from '../src'
+import { LOGGER_NAME, LOG_LEVELS, LOG_METHODS } from '../src/log'
+import { relayTest, resolveBaseUrl } from '../src/api'
 
 /** CJS 互操作：这些包的插件本体都在 default 上 */
 const httpPlugin = (require('@koishijs/plugin-http') as any).default
 const memoryPlugin = (require('@koishijs/plugin-database-memory') as any).default
 const mockPlugin = (require('@koishijs/plugin-mock') as any).default
+// plugin-help 的产物用命名导出（apply/name/Config），没有 default
+const helpPlugin = require('@koishijs/plugin-help')
 
 const now = Math.floor(Date.now() / 1000)
 
@@ -110,6 +115,8 @@ const SITE = {
   about: '这是一个用于测试的 New API 站点。',
 }
 
+const HELP_TEXT = '自定义帮助底部：遇到问题请到仓库提 issue。'
+
 const baseConfig = {
   accessToken: '',
   userId: 0,
@@ -119,6 +126,8 @@ const baseConfig = {
   perfHours: 24,
   healthHours: 1,
   healthThreshold: 95,
+  logLevel: 'error' as const,
+  helpText: HELP_TEXT,
   monitor: { enabled: false, interval: 300, cron: '', channels: [], apiKey: '', models: [], threshold: 2 },
   test: { enabled: false, model: 'gpt-4o-mini', prompt: 'hi', maxTokens: 16, timeout: 5000, presets: {} },
 }
@@ -166,6 +175,7 @@ beforeAll(async () => {
   baseUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
 
   app = new App({ prefix: ['/', ''], autoAssign: false })
+  app.plugin(helpPlugin)
   app.plugin(memoryPlugin)
   app.plugin(mockPlugin)
   app.plugin(httpPlugin)
@@ -223,19 +233,27 @@ describe('指令注册', () => {
 })
 
 describe('指令输出', () => {
-  it('/newapi help 列出全部用法', async () => {
+  it('/newapi help 走 Koishi help，并在末尾追加自定义文本', async () => {
     const text = await run('/newapi help')
-    expect(text).toContain('指令前缀 newapi')
-    expect(text).toContain('newapi status')
-    expect(text).toContain('newapi model status')
-    expect(text).toContain('newapi test')
-    // help 文案跟着实现走：network 现在以站点线路为主
-    expect(text).toContain('站点线路')
+    // 正文来自 @koishijs/plugin-help：标题 + 用法 + 子指令清单都是一层层列
+    expect(text).toContain('指令：newapi')
+    expect(text).toContain('/newapi status')
+    expect(text).toContain('/newapi model')
+    expect(text).toContain('/newapi test')
+    // 自定义底部文本必须真的在最后
+    expect(text.trimEnd().endsWith(HELP_TEXT)).toBe(true)
   })
 
-  it('/newapi（根命令）等价于 help', async () => {
+  it('/newapi（根命令）同样走 Koishi help', async () => {
     const text = await run('/newapi')
-    expect(text).toContain('指令前缀 newapi')
+    expect(text).toContain('/newapi status')
+    expect(text.trimEnd().endsWith(HELP_TEXT)).toBe(true)
+  })
+
+  it('/newapi model（子命令根）展示自己的子指令', async () => {
+    const text = await run('/newapi model')
+    expect(text).toContain('/newapi model status')
+    expect(text.trimEnd().endsWith(HELP_TEXT)).toBe(true)
   })
 
   it('/newapi status 带站点信息', async () => {
@@ -446,6 +464,66 @@ describe('异常处理', () => {
       expect(text).not.toContain('secret-token-should-not-leak')
     } finally {
       await broken.stop()
+    }
+  })
+})
+describe('baseUrl 归一化', () => {
+  it('只剥末尾的 /v1、/api，保留真实子路径', () => {
+    expect(resolveBaseUrl('https://a.example.com/v1')).toBe('https://a.example.com')
+    expect(resolveBaseUrl('https://a.example.com/api/')).toBe('https://a.example.com')
+    expect(resolveBaseUrl('https://a.example.com/newapi/v1')).toBe('https://a.example.com/newapi')
+    expect(resolveBaseUrl('a.example.com')).toBe('https://a.example.com')
+    expect(resolveBaseUrl('https://a.example.com/')).toBe('https://a.example.com')
+  })
+
+  it('404 时给出可执行的排查方向，且不泄漏令牌', async () => {
+    const key = 'sk-test-1234567890'
+    const result = await relayTest(app as any, {
+      baseUrl: baseUrl + '/v1',
+      apiKey: key,
+      model: 'gpt-4o-mini',
+      timeout: 3000,
+    })
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe(404)
+    expect(result.error).toContain('baseUrl 只填站点根地址')
+    expect(result.error).not.toContain(key)
+  })
+})
+
+describe('5 等级日志', () => {
+  it('命名空间注册给 Koishi，且 5 个等级方法齐备', () => {
+    expect(Logger.levels[LOGGER_NAME]).toBe(Logger.ERROR)
+    const logger = app.logger(LOGGER_NAME)
+    for (const method of LOG_METHODS) {
+      expect(typeof (logger as any)[method], method).toBe('function')
+    }
+  })
+
+  it('档位映射与 reggol 常量一致', () => {
+    expect(LOG_LEVELS.silent).toBe(Logger.SILENT)
+    expect(LOG_LEVELS.error).toBe(Logger.ERROR)
+    expect(LOG_LEVELS.info).toBe(Logger.INFO)
+    expect(LOG_LEVELS.debug).toBe(Logger.DEBUG)
+  })
+})
+
+describe('未安装 @koishijs/plugin-help 时的回退', () => {
+  it('/bare help 回退到内置清单，仍追加自定义文本', async () => {
+    const bare = new App({ prefix: ['/', ''], autoAssign: false })
+    bare.plugin(memoryPlugin)
+    bare.plugin(mockPlugin)
+    bare.plugin(httpPlugin)
+    bare.plugin(plugin, { ...baseConfig, baseUrl, commandPrefix: 'bare' } as any)
+    await bare.start()
+    try {
+      await bare.mock.initUser('admin', 3)
+      await bare.mock.initChannel('200')
+      const text = (await bare.mock.client('admin', '200').receive('/bare help')).join('\n')
+      expect(text).toContain('bare model status')
+      expect(text.trimEnd().endsWith(HELP_TEXT)).toBe(true)
+    } finally {
+      await bare.stop()
     }
   })
 })

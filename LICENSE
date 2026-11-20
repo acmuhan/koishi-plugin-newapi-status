@@ -1,20 +1,31 @@
-MIT License
+专有软件许可协议 / Proprietary License
+Copyright (c) 2025 acmuhan. All rights reserved.
 
-Copyright (c) 2026 acmuhan
+本软件（koishi-plugin-newapi-status）及其源代码、编译产物、文档与示例图片
+均为版权持有人 acmuhan 的专有财产。未经版权持有人事先书面授权，任何人不得：
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. 复制、转载、镜像、摘录本软件源代码的全部或任何部分；
+2. 修改、翻译、演绎本软件，或基于本软件创作衍生作品；
+3. 分发、发布、公开传播、出售、转售、出租或以其他方式再许可本软件；
+4. 将本软件或其衍生作品用于商业用途，或以此对外提供收费服务；
+5. 移除、掩盖或更改本软件中的任何版权、许可声明。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+无需单独授权即可进行的行为（仅限以下）：
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR OTHER DEALINGS IN THE SOFTWARE.
+- 通过 npm / 包管理器安装本软件，并在自用环境中运行；
+- 在未修改本软件的前提下，将本软件作为依赖随自己的 Koishi 实例部署；
+- 阅读源代码用于学习与评估（不得复制、摘录或再分发）。
+
+任何超出上述范围的使用——包括但不限于二次开发、修改后发布、
+把源码并入其他项目、商业部署或对外提供服务——必须先取得书面授权。
+授权申请请通过以下地址联系版权持有人：
+
+  https://github.com/acmuhan/koishi-plugin-newapi-status/issues
+
+取得授权后，双方另行签署书面许可协议，本协议不构成任何默示授权。
+
+免责声明：本软件按"原样"提供，不附带任何明示或默示的担保，包括但不限于
+适销性、特定用途适用性与不侵权的担保。在任何情况下，版权持有人均不对
+因使用或无法使用本软件而产生的任何直接、间接、附带或后果性损害承担责任。
+
+SPDX-License-Identifier: LicenseRef-Proprietary

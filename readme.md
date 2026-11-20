@@ -10,18 +10,6 @@
 - 可选定时巡检：站点从「可用 → 不可用」时告警、恢复时通知；填了 `monitor.apiKey` 还会对 `/v1/models` 做差集轮询，模型因渠道被禁而消失时告警、恢复时通知
 - 装了 puppeteer 出图片卡片，没装自动降级为纯文本
 
-## 效果预览
-
-装了 puppeteer 时输出暗色玻璃拟态卡片，没装自动降级为纯文本。
-
-![站点状态](https://raw.githubusercontent.com/acmuhan/koishi-plugin-newapi-status/main/samples/status.png)
-
-![模型状态](https://raw.githubusercontent.com/acmuhan/koishi-plugin-newapi-status/main/samples/model-status.png)
-
-| 模型列表 | 分组倍率 | 站点线路 |
-| --- | --- | --- |
-| ![模型列表](https://raw.githubusercontent.com/acmuhan/koishi-plugin-newapi-status/main/samples/model-list.png) | ![分组倍率](https://raw.githubusercontent.com/acmuhan/koishi-plugin-newapi-status/main/samples/group.png) | ![站点线路](https://raw.githubusercontent.com/acmuhan/koishi-plugin-newapi-status/main/samples/network.png) |
-
 ## 安装
 
 ```bash
@@ -104,6 +92,8 @@ New API 有两套完全不同的凭据，填错了只会看到 401 / 403：
 
 `newapi test` 需要 **3 级权限**（`authority:3`）。低权限用户调用会被 Koishi 拒绝，回复「权限不足」，且不会把 key 写进任何输出。
 
+> `newapi help` 不自己拼文本，而是调用 Koishi 官方的 [help 插件](https://help.koishi.chat/)（`session.execute({ name: 'help' }, true)`）渲染，再把你配置的 `helpText` 追加在末尾。装了 help 插件就拿到它完整的排版与分页能力；没装则退回插件内置的清单。
+
 > `newapi test list` 之所以能匹配到 `newapi test`：Koishi 的命令解析遇到带参数的命令会先停在该命令上，所以 `list` 会作为参数传进 `test`，由插件内部特判。这是 Koishi 的既定行为，不是 bug。
 
 ## 配置项
@@ -112,11 +102,12 @@ New API 有两套完全不同的凭据，填错了只会看到 401 / 403：
 
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `baseUrl` | string | 必填 | 站点地址，如 `https://api.example.com`。不要带 `/api` 后缀，插件会自己拼 |
+| `baseUrl` | string | 必填 | 站点地址，如 `https://api.example.com`。填到站点根即可，末尾误带的 `/v1`、`/api` 会自动剥掉 |
 | `accessToken` | string（secret） | `''` | 面板 access_token / PAT。**不是 `sk-` 开头的调用令牌** |
 | `userId` | number | `0` | 面板用户 ID。v0.13 及以前必须填（用于 `New-Api-User` 头），v1.0+ 可留 0 |
 | `commandPrefix` | string | `newapi` | 指令前缀，支持逗号分隔多个 |
 | `timeout` | number | `10000` | 单次 HTTP 请求超时（毫秒） |
+| `logLevel` | `silent` \| `error` \| `info` \| `debug` | `info` | 注册给 Koishi 的日志等级，作用于 `ctx.logger('newapi-status')`。`debug` 会额外打出每次请求的地址与耗时 |
 
 ### 展示设置
 
@@ -127,6 +118,7 @@ New API 有两套完全不同的凭据，填错了只会看到 401 / 403：
 | `perfHours` | number | `24` | `model status` 默认统计窗口（小时），上限 720（New API 的上限是 30 天） |
 | `healthHours` | number | `1` | `model health` 的统计窗口（小时） |
 | `healthThreshold` | number | `95` | `model health` 的成功率阈值（0–100） |
+| `helpText` | string | `''` | 追加在 `help` 输出最末尾的自定义文本，支持多行。留空则不加 |
 
 延迟配色：`< 1500ms` 绿、`1500–5000ms` 黄、`> 5000ms` 红、无数据灰。
 
@@ -224,4 +216,10 @@ src/
 
 ## License
 
-MIT © [acmuhan](https://github.com/acmuhan)
+本项目**不是**开源软件。代码版权归 acmuhan 所有，许可证为自定义的《专有软件许可协议》
+（`LicenseRef-Proprietary`，见仓库根目录 `LICENSE`）。
+
+- 允许：通过 npm 安装并在自用 Koishi 实例中运行、未修改地随自己的实例部署、阅读源码学习与评估。
+- 需要事先书面授权：复制或摘录源码、修改/二次开发后使用、分发或再发布、商业用途、对外提供收费服务。
+
+授权申请请到 <https://github.com/acmuhan/koishi-plugin-newapi-status/issues> 提交 issue。

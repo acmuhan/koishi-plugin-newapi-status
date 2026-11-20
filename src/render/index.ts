@@ -4,6 +4,7 @@ import { renderCardText, renderListText } from '../text'
 import type { CardView, ListView } from '../view'
 import { ChannelCard } from './ChannelCard'
 import { StatusCard } from './StatusCard'
+import { LOGGER_NAME } from '../log'
 import { CARD_WIDTH, CSS } from './styles'
 
 export type RenderMode = 'auto' | 'image' | 'text'
@@ -65,7 +66,7 @@ async function render(
   try {
     return await puppeteer.render(wrap(body, title))
   } catch (error) {
-    ctx.logger('newapi-status').warn('卡片渲染失败，降级为文字输出：%s', (error as Error)?.message)
+    ctx.logger(LOGGER_NAME).warn('卡片渲染失败，降级为文字输出：%s', (error as Error)?.message)
     return h.text(`${fallback()}\n\n（卡片渲染失败，已降级为文字）`)
   }
 }

@@ -3,9 +3,11 @@ import type { Config } from './config'
 import { getSiteStatus, listRelayModels, probeSite } from './api'
 import type { ApiClientOptions } from './api'
 import { formatDuration, formatLatency } from './format'
+import { LOGGER_NAME } from './log'
 import { renderError } from './text'
 
-export const loggerName = 'newapi-status'
+/** 与控制台日志页一致的命名空间；任何模块都用这一个，别自己拼字符串 */
+export const loggerName = LOGGER_NAME
 
 export interface MonitorState {
   /** 连续失败次数 */

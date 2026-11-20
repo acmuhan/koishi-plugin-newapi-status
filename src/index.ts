@@ -30,6 +30,7 @@ import {
   formatSuccessRate,
   parseAnnouncements,
 } from './format'
+import { createLogger } from './log'
 import { startMonitor } from './monitor'
 import { renderCard, renderList } from './render'
 import type { RenderOptions } from './render'
@@ -105,7 +106,8 @@ function clampHours(value: number | undefined, fallback: number): number {
 }
 
 export function apply(ctx: Context, config: PluginConfig) {
-  const logger = ctx.logger(name)
+  // 5 等级 logger（success/error/info/warn/debug），命名空间 newapi-status 注册给 Koishi
+  const logger = createLogger(ctx, config.logLevel)
   const prefixes = normalizePrefix(config.commandPrefix)
   const client: ApiClientOptions = {
     baseUrl: config.baseUrl,
@@ -131,7 +133,13 @@ export function apply(ctx: Context, config: PluginConfig) {
       } catch (error) {
         const raw = error instanceof NewApiError ? error.message : String((error as Error)?.message ?? error)
         const message = sanitize(raw, ...secrets())
-        logger.warn('%s', message)
+        if (error instanceof NewApiError) {
+          // 上游明确拒绝（4xx/网络），属于可恢复的业务失败
+          logger.warn('%s', message)
+        } else {
+          logger.error('指令执行异常：%s', message)
+          if (error instanceof Error && error.stack) logger.debug('%s', sanitize(error.stack, ...secrets()))
+        }
         return h.text(renderError('查询失败', message))
       }
     }
@@ -512,6 +520,11 @@ export function apply(ctx: Context, config: PluginConfig) {
       maxTokens: config.test.maxTokens,
       timeout: config.test.timeout || config.timeout,
     })
+    if (result.ok) {
+      logger.success('连通性测试通过：%s，总耗时 %dms，首 Token %dms', targetModel, result.totalMs, result.firstTokenMs)
+    } else {
+      logger.warn('连通性测试失败：%s，HTTP %s，%s', targetModel, result.status || '--', result.error ?? '未知错误')
+    }
     const rows: ListRowView[] = [
       { name: '结果', value: result.ok ? '成功' : '失败', level: result.ok ? 'ok' : 'fail' },
       { name: '模型', value: result.model },
@@ -528,20 +541,47 @@ export function apply(ctx: Context, config: PluginConfig) {
     }))
   }
 
+  // ── 帮助 ──────────────────────────────────────────────────────
+  /**
+   * 帮助正文交给 Koishi 自己的 help 指令生成，不再自己拼一份文本。
+   * session.execute(..., true) 只取返回值、不发送（core: shouldEmit=false → h.normalize），
+   * 避免一次调用发出两条消息；再把 config.helpText 追加到最末尾。
+   * 宿主没装 @koishijs/plugin-help（或 help 指令被禁用）时，回退到内置清单。
+   */
+  async function koishiHelp(argv: any, target: string, fallback: () => any): Promise<any> {
+    const footer = (config.helpText || '').trim()
+    let body: any = null
+    const session = argv?.session
+    if (session && typeof session.execute === 'function') {
+      try {
+        body = h.normalize(await session.execute({ name: 'help', args: [target] }, true))
+      } catch (error) {
+        logger.debug('Koishi help 不可用，回退内置清单：%s', sanitize(String((error as Error)?.message), ...secrets()))
+      }
+    }
+    if (!body || !body.length) body = h.normalize(fallback())
+    if (!footer) return body
+    return concat(body, h.text('\n' + sanitize(footer, ...secrets())))
+  }
+
   // ── 指令注册 ──────────────────────────────────────────────────
   for (const prefix of prefixes) {
+    const fullList = () => commandList(prefix, clampHours(config.healthHours, 1))
     const root = ctx.command(prefix, 'New API 站点状态查询')
-    const help = action(async () => h.text(renderHelp(prefix, commandList(prefix, clampHours(config.healthHours, 1)))))
-    root.action(help)
+      .usage(`输入 ${prefix} help 查看全部子指令；任意子指令加 -h 查看详细帮助。`)
+    root.action(action(argv => koishiHelp(argv, prefix, () => h.text(renderHelp(prefix, fullList())))))
 
-    ctx.command(`${prefix}.help`, '列出全部指令和用法').action(help)
+    ctx.command(`${prefix}.help`, '列出全部指令和用法')
+      .example(`${prefix} help`)
+      .action(action(argv => koishiHelp(argv, prefix, () => h.text(renderHelp(prefix, fullList())))))
     ctx.command(`${prefix}.status`, '查询站点状态').action(action(statusAction))
     ctx.command(`${prefix}.notice`, '查看最新时间线与公告').action(action(noticeAction))
     ctx.command(`${prefix}.about`, '关于本插件').action(action(aboutAction))
 
     const modelRoot = ctx.command(`${prefix}.model`, '模型相关查询')
-    modelRoot.action(action(async () => h.text(renderHelp(prefix, commandList(prefix, clampHours(config.healthHours, 1))
-      .filter(item => item.usage.includes(`${prefix} model`))))))
+      .usage(`输入 ${prefix} model 查看模型相关子指令。`)
+    modelRoot.action(action(argv => koishiHelp(argv, `${prefix}.model`, () => h.text(renderHelp(prefix,
+      fullList().filter(item => item.usage.includes(`${prefix} model`)))))))
 
     ctx.command(`${prefix}.model.search <keyword>`, '模糊搜索模型名')
       .action(action(async (_argv, keyword) => modelSearchAction(String(keyword ?? ''))))
@@ -581,6 +621,9 @@ export function apply(ctx: Context, config: PluginConfig) {
         return testAction(model ? String(model) : undefined, credential ? String(credential) : undefined)
       }))
   }
+
+  logger.info('插件已加载：前缀 %s，站点 %s，渲染 %s，日志等级 %s',
+    prefixes.join(', '), hostOf(config.baseUrl), config.render, config.logLevel)
 
   if (config.monitor.enabled) {
     ctx.on('ready', () => {

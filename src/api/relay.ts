@@ -24,6 +24,31 @@ export interface RelayTestResult {
   error?: string
 }
 
+/**
+ * 把上游的错误响应体读成一段文本。
+ * responseType=stream 时 axios 的 error.response.data 是流不是字符串，
+ * 直接 String() 只会得到 "[object ReadableStream]"，定位问题全靠这段。
+ */
+async function readErrorBody(raw: any, limit = 400): Promise<string | undefined> {
+  const stream = raw as ReadableStream<Uint8Array> | undefined
+  const reader = stream?.getReader?.()
+  if (!reader) return typeof raw === 'string' ? raw.slice(0, limit) : undefined
+  const decoder = new TextDecoder()
+  let text = ''
+  try {
+    while (text.length < limit) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) text += decoder.decode(value, { stream: true })
+    }
+    text += decoder.decode()
+  } catch {
+    // 读失败就用已读到的部分
+  }
+  text = text.trim()
+  return text ? text.slice(0, limit) : undefined
+}
+
 interface StreamChunk {
   choices?: Array<{
     delta?: { content?: string | null, reasoning_content?: string | null }
@@ -72,11 +97,12 @@ export async function listRelayModels(
     return { ok: true, models, status: response.status }
   } catch (error) {
     const status = (error as any)?.response?.status as number | undefined
+    const hint = status === 404 ? `（404：请确认 baseUrl 只填站点根地址；本次实际请求 ${url}）` : ''
     return {
       ok: false,
       models: [],
       status: status ?? 0,
-      error: sanitize(String((error as Error)?.message ?? '请求失败'), options.apiKey),
+      error: sanitize(String((error as Error)?.message ?? '请求失败') + hint, options.apiKey),
     }
   }
 }
@@ -157,14 +183,19 @@ export async function relayTest(ctx: Context, options: RelayTestOptions): Promis
     const totalMs = Date.now() - started
     const status = (error as any)?.response?.status as number | undefined
     const raw = (error as any)?.response?.data
-    const message = typeof raw === 'string' ? raw : (error as Error)?.message
+    const detail = typeof raw === 'string' ? raw : await readErrorBody(raw)
+    const base = detail ? `${detail}` : String((error as Error)?.message ?? '请求失败')
+    // 404 几乎都是 baseUrl 多写了 /v1 或 /api，直接把排查方向写进错误里
+    const hint = status === 404
+      ? `（404：请确认 baseUrl 只填站点根地址、不带 /v1 或 /api；本次实际请求 ${url}）`
+      : ''
     return {
       ok: false,
       model: options.model,
       firstTokenMs: totalMs,
       totalMs,
       status: status ?? 0,
-      error: sanitize(String(message ?? '请求失败'), options.apiKey),
+      error: sanitize(base + hint, options.apiKey),
     }
   }
 }

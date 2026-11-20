@@ -1,12 +1,23 @@
 import { Context } from 'koishi'
 import type { ApiEnvelope } from '../types'
 
-/** 站点 URL 归一化：去掉尾部斜杠，补全协议 */
+/**
+ * 站点 URL 归一化：补全协议、去掉尾部斜杠，并剥掉误粘进来的 /v1、/api 后缀。
+ * 插件自己会拼 /api/status、/v1/chat/completions，用户多写一段就会变成
+ * /v1/v1/chat/completions 这类 404 —— 这是最常见的配置错误，直接在这里吃掉。
+ */
 export function resolveBaseUrl(input: string): string {
   let url = (input || '').trim()
   if (!url) throw new NewApiError('未配置 baseUrl：请在插件配置里填写 New API 站点地址')
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url
-  return url.replace(/\/+$/, '')
+  url = url.replace(/\/+$/, '')
+  // 只剥末尾那一段，保留 /newapi 这类真实子路径
+  for (;;) {
+    const matched = url.match(/\/(v1|api)$/i)
+    if (!matched) break
+    url = url.slice(0, -matched[0].length)
+  }
+  return url
 }
 
 /**

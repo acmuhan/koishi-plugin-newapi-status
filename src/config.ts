@@ -1,4 +1,5 @@
 import { Schema } from 'koishi'
+import type { LogLevelName } from './log'
 
 /** 系统配置里预设的测试凭据 */
 export interface TestPreset {
@@ -52,6 +53,10 @@ export interface Config {
   perfHours: number
   healthHours: number
   healthThreshold: number
+  /** 日志过滤档位：silent / error / info / debug（对应 reggol 的 0/1/2/3） */
+  logLevel: LogLevelName
+  /** 追加在 /newapi help 底部的自定义文本，留空则不追加 */
+  helpText: string
   monitor: MonitorConfig
   test: TestConfig
 }
@@ -59,7 +64,7 @@ export interface Config {
 export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     baseUrl: Schema.string()
-      .description('New API 站点地址，例如 https://api.example.com（不要带 /api 后缀）')
+      .description('New API 站点地址，例如 https://api.example.com。只填到站点根即可；末尾误带的 /v1、/api 会被自动剥掉')
       .required(),
     accessToken: Schema.string()
       .role('secret')
@@ -74,6 +79,14 @@ export const Config: Schema<Config> = Schema.intersect([
     timeout: Schema.natural()
       .description('单次 HTTP 请求超时（毫秒）')
       .default(10000),
+    logLevel: Schema.union([
+      Schema.const('silent').description('完全不输出'),
+      Schema.const('error').description('只输出 success / error'),
+      Schema.const('info').description('输出 success / error / info / warn（默认）'),
+      Schema.const('debug').description('全部输出，含请求耗时等诊断细节'),
+    ])
+      .description('日志等级过滤。日志命名空间固定为 newapi-status，在 Koishi 控制台「日志」页按此过滤')
+      .default('info'),
   }).description('基础设置'),
 
   Schema.object({
@@ -96,6 +109,10 @@ export const Config: Schema<Config> = Schema.intersect([
     healthThreshold: Schema.natural()
       .description('model health 的成功率阈值（0-100）')
       .default(95),
+    helpText: Schema.string()
+      .role('textarea')
+      .description('追加在 /newapi help 输出底部的自定义文本，支持换行。留空则不追加')
+      .default(''),
   }).description('展示设置'),
 
   Schema.object({

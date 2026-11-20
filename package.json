@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-newapi-status",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "查询 New API 站点的运行状态、模型表现、分组倍率与监控可用性",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -8,7 +8,7 @@
     "lib",
     "readme.md"
   ],
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "acmuhan",
   "repository": {
     "type": "git",
@@ -47,6 +47,7 @@
   },
   "devDependencies": {
     "@koishijs/plugin-database-memory": "^3.7.0",
+    "@koishijs/plugin-help": "^2.4.6",
     "@koishijs/plugin-http": "^0.6.3",
     "@koishijs/plugin-mock": "^2.6.6",
     "@types/node": "^22.10.0",
