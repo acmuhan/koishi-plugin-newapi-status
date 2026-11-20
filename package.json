@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-newapi-status",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "查询 New API 站点的运行状态、模型表现、分组倍率与监控可用性",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",

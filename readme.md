@@ -92,7 +92,11 @@ New API 有两套完全不同的凭据，填错了只会看到 401 / 403：
 
 `newapi test` 需要 **3 级权限**（`authority:3`）。低权限用户调用会被 Koishi 拒绝，回复「权限不足」，且不会把 key 写进任何输出。
 
-> `newapi help` 不自己拼文本，而是调用 Koishi 官方的 [help 插件](https://help.koishi.chat/)（`session.execute({ name: 'help' }, true)`）渲染，再把你配置的 `helpText` 追加在末尾。装了 help 插件就拿到它完整的排版与分页能力；没装则退回插件内置的清单。
+> `newapi help` 不自己拼文本，而是调用 Koishi 官方的 [help 插件](https://help.koishi.chat/)（`session.execute({ name: 'help' }, true)`）渲染，再把你配置的 `helpText` 追加在末尾。
+>
+> - 根指令只列**一层**子指令（`about` / `group` / `help` / `model` / `network` / `notice` / `status` / `test`），二级指令的用法交给 `-h`：`newapi model -h` 看模型相关用法，`newapi model status -h` 看选项和示例。
+> - **一次调用只发一条消息**。新版 `@koishijs/plugin-help`（≥ 2.4）会把帮助正文返回给我们，`helpText` 能正常追加；旧版本 help 是在自己内部 `session.send()` 之后返回空值，此时插件不再补发第二条（代价是旧版本上 `helpText` 不显示）。所以如果发现底部自定义文本没生效，先升级 `@koishijs/plugin-help`。
+> - 完全没装 help 插件时，退回插件内置的指令清单，同样追加 `helpText`。
 
 > `newapi test list` 之所以能匹配到 `newapi test`：Koishi 的命令解析遇到带参数的命令会先停在该命令上，所以 `list` 会作为参数传进 `test`，由插件内部特判。这是 Koishi 的既定行为，不是 bug。
 

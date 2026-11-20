@@ -542,24 +542,43 @@ export function apply(ctx: Context, config: PluginConfig) {
   }
 
   // ── 帮助 ──────────────────────────────────────────────────────
+  /** 宿主里有没有 Koishi 的 help 指令（@koishijs/plugin-help 提供） */
+  function hasKoishiHelp(): boolean {
+    try {
+      return Boolean((ctx.root as any).$commander?.get?.('help'))
+    } catch {
+      return false
+    }
+  }
+
   /**
-   * 帮助正文交给 Koishi 自己的 help 指令生成，不再自己拼一份文本。
-   * session.execute(..., true) 只取返回值、不发送（core: shouldEmit=false → h.normalize），
-   * 避免一次调用发出两条消息；再把 config.helpText 追加到最末尾。
-   * 宿主没装 @koishijs/plugin-help（或 help 指令被禁用）时，回退到内置清单。
+   * 帮助正文交给 Koishi 自己的 help 指令生成，插件不再自己拼一份文本。
+   *
+   * 两种 plugin-help 都要兼容，否则会发两条帮助：
+   * - 新版（≥2.4）help 的 action 把文本 return 出来，session.execute(..., true) 能拿到 → 我们发这一条。
+   * - 老版 help 的 action 内部自己 session.send()，返回值是 undefined → 那条消息已经发出去了，
+   *   此时必须什么都不发，否则用户会同时收到 help 插件那一条和我们的兜底清单。
+   * 所以：拿到正文才发；没正文但 help 指令存在 → 认为已经被 help 插件发过，不再重复。
+   * 宿主完全没装 plugin-help 时，才回退内置清单（保证 help 不是哑的）。
    */
   async function koishiHelp(argv: any, target: string, fallback: () => any): Promise<any> {
     const footer = (config.helpText || '').trim()
-    let body: any = null
     const session = argv?.session
+    let body: any = null
     if (session && typeof session.execute === 'function') {
       try {
         body = h.normalize(await session.execute({ name: 'help', args: [target] }, true))
       } catch (error) {
-        logger.debug('Koishi help 不可用，回退内置清单：%s', sanitize(String((error as Error)?.message), ...secrets()))
+        logger.debug('Koishi help 调用失败：%s', sanitize(String((error as Error)?.message), ...secrets()))
       }
     }
-    if (!body || !body.length) body = h.normalize(fallback())
+    if (!body || !body.length) {
+      if (hasKoishiHelp()) {
+        logger.debug('help 插件已自行发送帮助（旧版行为），本次不再重复发送；helpText 不追加。升级 @koishijs/plugin-help ≥2.4 可让 helpText 生效。')
+        return ''
+      }
+      body = h.normalize(fallback())
+    }
     if (!footer) return body
     return concat(body, h.text('\n' + sanitize(footer, ...secrets())))
   }
@@ -579,7 +598,9 @@ export function apply(ctx: Context, config: PluginConfig) {
     ctx.command(`${prefix}.about`, '关于本插件').action(action(aboutAction))
 
     const modelRoot = ctx.command(`${prefix}.model`, '模型相关查询')
-      .usage(`输入 ${prefix} model 查看模型相关子指令。`)
+      .usage(`输入 ${prefix} model 查看模型相关子指令；用 -h 可查看每个子指令的用法与示例。`)
+      .example(`${prefix} model search gpt`)
+      .example(`${prefix} model status <模型> -t 12 -g <分组>`)
     modelRoot.action(action(argv => koishiHelp(argv, `${prefix}.model`, () => h.text(renderHelp(prefix,
       fullList().filter(item => item.usage.includes(`${prefix} model`)))))))
 
@@ -621,35 +642,6 @@ export function apply(ctx: Context, config: PluginConfig) {
         return testAction(model ? String(model) : undefined, credential ? String(credential) : undefined)
       }))
   }
-
-  /**
-   * Koishi help 的 formatCommands 只迭代 command.children——只列一层子指令，
-   * 所以 `nekoapi` 的帮助里看不到 `nekoapi model status` 这类二级指令。
-   * showHelp 会 emit('help/command', output, command, session)，这里从指令注册表里
-   * 把二级指令补进同一个 output；仍然是一条 Koishi help 消息，不额外多发一条。
-   */
-  // 事件名由 @koishijs/plugin-help 声明，宿主没装它时类型里没有这个 key，这里放宽类型
-  ctx.on('help/command' as any, (output: string[], command: any, session: any) => {
-    const scope = String(command?.name ?? '')
-    if (!prefixes.includes(scope)) return
-    const lines: string[] = []
-    for (const child of command.children ?? []) {
-      for (const grand of child.children ?? []) {
-        if (session && session.resolve(grand.config?.hidden)) continue
-        const title = String(grand.displayName ?? grand.name).replace(/\./g, ' ')
-        const desc = session ? session.text([`commands.${grand.name}.description`, '']) : ''
-        lines.push(`    /${title}${grand.declaration ?? ''}${desc ? '  ' + desc : ''}`)
-      }
-    }
-    // `test list` 不是独立指令，但它是最常用的用法之一，单独补一行
-    const usage = commandList(scope, clampHours(config.healthHours, 1))
-      .find(item => item.usage === `${scope} test list`)
-    if (usage && (command.children ?? []).some((child: any) => child.name === `${scope}.test`)) {
-      lines.push(`    /${usage.usage}  ${sanitize(usage.desc, ...secrets())}`)
-    }
-    if (!lines.length) return
-    output.push('', '二级子指令：', ...lines)
-  })
 
   logger.info('插件已加载：前缀 %s，站点 %s，渲染 %s，日志等级 %s',
     prefixes.join(', '), hostOf(config.baseUrl), config.render, config.logLevel)

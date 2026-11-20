@@ -234,24 +234,49 @@ describe('指令注册', () => {
 
 describe('指令输出', () => {
   it('/newapi help 走 Koishi help，并在末尾追加自定义文本', async () => {
-    // 一次调用只能发一条消息（曾经因为先在 help 里发送、再返回兜底文本而发两条）
+    // 一次调用只能发一条消息（曾经因为 help 插件自己发一条、我们又补一条兜底清单而变成两条）
     const replies = await app.mock.client('admin', '200').receive('/newapi help')
     expect(replies.length).toBe(1)
     const text = replies.join('\n')
-    // 正文来自 @koishijs/plugin-help：标题 + 用法 + 子指令清单都是一层层列
+    // 正文来自 @koishijs/plugin-help：标题 + 用法 + 一层子指令清单
     expect(text).toContain('指令：newapi')
     expect(text).toContain('/newapi status')
     expect(text).toContain('/newapi model')
     expect(text).toContain('/newapi test')
-    // Koishi 的 formatCommands 只列一层子指令，二级指令由 help/command 钩子补进同一段输出
-    expect(text).toContain('二级子指令')
-    expect(text).toContain('/newapi model status')
-    expect(text).toContain('/newapi model health')
-    expect(text).toContain('/newapi group ratio')
-    expect(text).toContain('/newapi group search')
-    expect(text).toContain('/newapi test list')
-    // 自定义底部文本必须真的在最后
+    // 二级指令不再塞进根帮助，交给各子指令的 -h
+    expect(text).not.toContain('二级子指令')
     expect(text.trimEnd().endsWith(HELP_TEXT)).toBe(true)
+  })
+
+  it('旧版 plugin-help 自己发帮助时，插件不再补发第二条', async () => {
+    // 老版本 help 的 action 内部 session.send() 后返回 undefined：正文拿不到，但消息已经发出去了
+    const oldApp = new App({ prefix: ['/', ''], autoAssign: false })
+    oldApp.plugin(memoryPlugin)
+    oldApp.plugin(mockPlugin)
+    oldApp.plugin(httpPlugin)
+    oldApp.command('help [command:string]', '旧版帮助').action(async ({ session }, target) => {
+      await session.send('OLD-HELP:' + (target || ''))
+      return undefined as any
+    })
+    oldApp.plugin(plugin, { ...baseConfig, baseUrl, commandPrefix: 'newapi' } as any)
+    await oldApp.start()
+    try {
+      await oldApp.mock.initUser('admin', 3)
+      await oldApp.mock.initChannel('200')
+      const replies = await oldApp.mock.client('admin', '200').receive('/newapi help')
+      expect(replies.length).toBe(1)
+      expect(replies[0]).toContain('OLD-HELP:newapi')
+      // 插件内置的兜底清单绝对不能出现
+      expect(replies[0]).not.toContain('指令前缀')
+    } finally {
+      await oldApp.stop()
+    }
+  })
+
+  it('/newapi model -h 展示子指令用法与示例', async () => {
+    const text = await run('/newapi model -h', 'admin')
+    expect(text).toContain('/newapi model status')
+    expect(text).toContain('使用示例')
   })
 
   it('/newapi（根命令）同样走 Koishi help', async () => {
