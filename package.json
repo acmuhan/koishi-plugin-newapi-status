@@ -1,0 +1,74 @@
+{
+  "name": "koishi-plugin-newapi-status",
+  "version": "0.1.0",
+  "description": "查询 New API 站点的运行状态、模型表现、分组倍率与监控可用性",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "readme.md"
+  ],
+  "license": "MIT",
+  "author": "acmuhan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acmuhan/koishi-plugin-newapi-status.git"
+  },
+  "bugs": {
+    "url": "https://github.com/acmuhan/koishi-plugin-newapi-status/issues"
+  },
+  "homepage": "https://github.com/acmuhan/koishi-plugin-newapi-status#readme",
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin",
+    "koishi-plugin",
+    "newapi",
+    "new-api",
+    "status"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "peerDependencies": {
+    "koishi": "^4.18.0"
+  },
+  "peerDependenciesMeta": {
+    "koishi": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@koishijs/plugin-database-memory": "^3.7.0",
+    "@koishijs/plugin-http": "^0.6.3",
+    "@koishijs/plugin-mock": "^2.6.6",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "koishi": "^4.18.7",
+    "koishi-plugin-puppeteer": "^3.9.0",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.8"
+  },
+  "koishi": {
+    "description": {
+      "zh-CN": "New API 站点状态查询：站点状态、模型表现、分组倍率、监控可用性",
+      "en": "Query a New API site: status, model performance, group ratios and monitor availability"
+    },
+    "service": {
+      "required": [
+        "http"
+      ],
+      "optional": [
+        "puppeteer"
+      ]
+    }
+  }
+}
